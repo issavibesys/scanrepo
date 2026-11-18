@@ -1,0 +1,53 @@
+# Example: scan every pull request, upload the reports and comment a summary.
+#
+# Uses the `pull_request` trigger on purpose: it runs the PR's code without repository secrets.
+# Do not switch to `pull_request_target` while this job checks out or runs pull request code.
+name: scanrepo
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Scan repository
+        id: scan
+        uses: ./   # replace with: your-org/scanrepo@<full-commit-sha>
+        with:
+          fail-on: high
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanrepo-reports
+          path: ${{ steps.scan.outputs.report-dir }}
+
+  comment:
+    needs: scan
+    if: always() && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Comment summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RESULT: ${{ needs.scan.result }}
+        run: |
+          body="### scanrepo: $RESULT
+          The full report is in the workflow artifact \`scanrepo-reports\`.
+          _Findings are leads with a confidence score, not verdicts. Quoted text comes from the repository and is untrusted._"
+          gh pr comment "$PR_NUMBER" --body "$body" --repo "$GITHUB_REPOSITORY"

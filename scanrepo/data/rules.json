@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "secrets": [
+    {"id": "secret.aws-access-key", "title": "AWS access key ID", "pattern": "\\b(?:AKIA|ASIA)[0-9A-Z]{16}\\b", "severity": "high", "confidence": 0.8},
+    {"id": "secret.private-key", "title": "Private key block committed", "pattern": "-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----", "severity": "critical", "confidence": 0.9, "mask": false},
+    {"id": "secret.github-token", "title": "GitHub token", "pattern": "\\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{50,255})\\b", "severity": "high", "confidence": 0.85},
+    {"id": "secret.slack-token", "title": "Slack token", "pattern": "\\bxox[abposr]-[A-Za-z0-9-]{10,}\\b", "severity": "high", "confidence": 0.8},
+    {"id": "secret.stripe-live-key", "title": "Stripe live key", "pattern": "\\b(?:sk|rk)_live_[0-9A-Za-z]{20,}\\b", "severity": "high", "confidence": 0.85},
+    {"id": "secret.npm-token", "title": "npm access token", "pattern": "\\bnpm_[A-Za-z0-9]{36}\\b", "severity": "high", "confidence": 0.85},
+    {"id": "secret.npmrc-auth-token", "title": "npm auth token in .npmrc style config", "pattern": "_authToken\\s*=\\s*([A-Za-z0-9_\\-.=]{20,})", "group": 1, "severity": "high", "confidence": 0.7},
+    {"id": "secret.google-api-key", "title": "Google API key", "pattern": "\\bAIza[0-9A-Za-z_\\-]{35}\\b", "severity": "medium", "confidence": 0.6},
+    {"id": "secret.jwt", "title": "JSON Web Token", "pattern": "\\beyJ[A-Za-z0-9_-]{10,}\\.eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b", "severity": "medium", "confidence": 0.5},
+    {"id": "secret.generic-assignment", "title": "Hardcoded credential-like value", "pattern": "(?i)\\b(?:api[_-]?key|apikey|secret(?:[_-]?key)?|access[_-]?token|auth[_-]?token|passwd|password|client[_-]?secret)\\b[\"']?\\s*[:=]\\s*[\"']([A-Za-z0-9_\\-/+=.]{16,})[\"']", "group": 1, "min_entropy": 3.3, "severity": "medium", "confidence": 0.5}
+  ],
+  "code": [
+    {"id": "code.py-eval-exec", "title": "Dynamic code execution (eval/exec)", "pattern": "(?<!def )(?<![\\w.])(?:eval|exec)\\s*\\(", "exts": ["py"], "severity": "medium", "confidence": 0.4, "detail": "eval/exec on non-constant input allows code injection. Check where the argument comes from."},
+    {"id": "code.py-shell-true", "title": "subprocess call with shell=True", "pattern": "\\bsubprocess\\.(?:run|call|Popen|check_output|check_call)\\s*\\([^)\\n]*shell\\s*=\\s*True", "exts": ["py"], "severity": "high", "confidence": 0.7, "detail": "A shell is spawned, so unsanitised input can inject commands."},
+    {"id": "code.py-os-system", "title": "Shell command via os.system/os.popen", "pattern": "\\bos\\.(?:system|popen)\\s*\\(", "exts": ["py"], "severity": "medium", "confidence": 0.5},
+    {"id": "code.py-unsafe-deserialization", "title": "Unsafe deserialization (pickle/marshal/dill)", "pattern": "\\b(?:pickle|cPickle|dill|marshal)\\.loads?\\s*\\(", "exts": ["py"], "severity": "medium", "confidence": 0.5, "detail": "Loading untrusted pickle data can execute arbitrary code."},
+    {"id": "code.py-yaml-load", "title": "yaml.load without a safe loader", "pattern": "\\byaml\\.load\\s*\\((?![^)\\n]*Loader\\s*=\\s*(?:yaml\\.)?(?:Safe|CSafe)Loader)", "exts": ["py"], "severity": "medium", "confidence": 0.55},
+    {"id": "code.py-debug-true", "title": "DEBUG enabled in code", "pattern": "^\\s*DEBUG\\s*=\\s*True\\b", "exts": ["py"], "severity": "low", "confidence": 0.3},
+    {"id": "code.js-eval", "title": "Dynamic code execution (eval / new Function)", "pattern": "(?<![\\w.$])eval\\s*\\(|\\bnew\\s+Function\\s*\\(", "exts": ["js", "jsx", "ts", "tsx", "mjs", "cjs"], "severity": "medium", "confidence": 0.45},
+    {"id": "code.js-child-process-exec", "title": "Shell command via child_process exec", "pattern": "\\b(?:child_process\\.)?execSync\\s*\\(|\\bchild_process\\.exec\\s*\\(", "exts": ["js", "jsx", "ts", "tsx", "mjs", "cjs"], "severity": "medium", "confidence": 0.4},
+    {"id": "code.js-innerhtml", "title": "Direct HTML injection sink (innerHTML / dangerouslySetInnerHTML)", "pattern": "\\.(?:innerHTML|outerHTML)\\s*=(?!=)|dangerouslySetInnerHTML", "exts": ["js", "jsx", "ts", "tsx", "mjs", "cjs", "html", "vue", "svelte"], "severity": "low", "confidence": 0.4},
+    {"id": "code.electron-node-integration", "title": "Electron: nodeIntegration enabled", "pattern": "\\bnodeIntegration\\s*:\\s*true\\b", "exts": ["js", "ts", "mjs", "cjs"], "severity": "medium", "confidence": 0.55, "detail": "Web content in this window can reach Node.js APIs. Combined with any XSS this becomes code execution."},
+    {"id": "code.electron-context-isolation-off", "title": "Electron: contextIsolation disabled", "pattern": "\\bcontextIsolation\\s*:\\s*false\\b", "exts": ["js", "ts", "mjs", "cjs"], "severity": "medium", "confidence": 0.55},
+    {"id": "code.electron-web-security-off", "title": "Electron: webSecurity disabled", "pattern": "\\bwebSecurity\\s*:\\s*false\\b", "exts": ["js", "ts", "mjs", "cjs"], "severity": "medium", "confidence": 0.55},
+    {"id": "code.go-shell-exec", "title": "Go: command run through a shell", "pattern": "exec\\.Command\\(\\s*\"(?:sh|bash|cmd)\"", "exts": ["go"], "severity": "medium", "confidence": 0.45},
+    {"id": "code.weak-hash", "title": "Weak hash algorithm (MD5/SHA-1)", "pattern": "\\bhashlib\\.(?:md5|sha1)\\b|createHash\\(\\s*['\"](?:md5|sha1)['\"]\\s*\\)|MessageDigest\\.getInstance\\(\\s*\"(?:MD5|SHA-?1)\"", "exts": ["py", "js", "ts", "mjs", "cjs", "java"], "severity": "low", "confidence": 0.4, "detail": "Fine for checksums, not for passwords or signatures."},
+    {"id": "code.pipe-to-shell", "title": "Downloads a script and pipes it into a shell", "pattern": "\\b(?:curl|wget)\\b[^\\n|;]*\\|\\s*(?:sudo\\s+)?(?:ba|z|da)?sh\\b", "skip_contexts": ["docs"], "severity": "high", "confidence": 0.6, "detail": "The executed code is whatever the remote server returns at that moment."},
+    {"id": "code.decode-and-exec", "title": "Decodes data and executes it", "pattern": "\\b(?:eval|exec)\\s*\\(\\s*(?:base64\\.b64decode|atob|Buffer\\.from|zlib\\.decompress|codecs\\.decode)\\b|\\bexec\\s*\\(\\s*compile\\s*\\(", "exts": ["py", "js", "mjs", "cjs", "ts", "php", "rb"], "severity": "high", "confidence": 0.7, "detail": "A common pattern for hiding malicious payloads."}
+  ],
+  "behavior": [
+    {"id": "beh.tls-verify-off-config", "title": "TLS certificate verification set to off", "pattern": "(?i)\\b(?:verify[_-]?(?:ssl|tls|certs?|certificates?|peer|host)|strict[_-]?ssl|ssl[_-]?verify\\w*|check[_-]?certificates?|reject[_-]?unauthorized|insecure[_-]?skip[_-]?verify)[\"']?\\s*[:=]\\s*[\"']?(?:false|0|no|off)\\b", "severity": "medium", "confidence": 0.5, "detail": "Check whether this is the default value. If so, requests to servers with invalid certificates are accepted silently."},
+    {"id": "beh.tls-verify-off-python", "title": "requests/httpx call with verify=False", "pattern": "\\bverify\\s*=\\s*False\\b", "exts": ["py"], "severity": "high", "confidence": 0.65},
+    {"id": "beh.tls-verify-off-go", "title": "Go: InsecureSkipVerify enabled", "pattern": "\\bInsecureSkipVerify\\s*:\\s*true\\b", "exts": ["go"], "severity": "high", "confidence": 0.7},
+    {"id": "beh.tls-verify-off-env", "title": "NODE_TLS_REJECT_UNAUTHORIZED disabled", "pattern": "NODE_TLS_REJECT_UNAUTHORIZED\\s*[=:]\\s*[\"']?0", "severity": "high", "confidence": 0.75},
+    {"id": "beh.curl-insecure", "title": "curl run with certificate checks disabled", "pattern": "\\bcurl\\b[^\\n]*\\s(?:-k|--insecure)\\b", "severity": "medium", "confidence": 0.5},
+    {"id": "beh.hostname-collection", "title": "Reads host or machine identifiers", "pattern": "\\bos\\.hostname\\(\\)|\\bsocket\\.gethostname\\(\\)|\\bplatform\\.node\\(\\)|node-machine-id|\\bmachine[_-]?id\\b|\\bmachineId\\b|\\bMachineGuid\\b|/etc/machine-id", "severity": "low", "confidence": 0.35, "detail": "Check whether this value leaves the machine (licensing, telemetry)."},
+    {"id": "beh.updater", "title": "Auto-updater present", "pattern": "\\b(?:autoUpdater|electron-updater|checkForUpdates(?:AndNotify)?)\\b", "severity": "info", "confidence": 0.5, "detail": "The app can download and install new versions itself."},
+    {"id": "beh.telemetry-sdk", "title": "Analytics / telemetry SDK referenced", "pattern": "(?i)\\b(?:posthog|mixpanel|amplitude|rudderstack|analytics-node|segment[-_.]analytics|heap-analytics|datadog-rum|logrocket|fullstory|hotjar|bugsnag|applicationinsights|google-analytics|gtag)\\b|@sentry/|\\bsentry_sdk\\b", "severity": "low", "confidence": 0.5, "detail": "Check what is sent and whether it is opt-in."},
+    {"id": "beh.telemetry-optout", "title": "Telemetry / tracking setting or opt-out present", "pattern": "(?i)\\b(?:DO_NOT_TRACK|NO_TELEMETRY|(?:disable|opt[_-]?out)[_-]?(?:telemetry|analytics|tracking)|telemetry[_-]?(?:enabled|disabled|opt[_-]?out))\\b", "severity": "info", "confidence": 0.5},
+    {"id": "beh.hidden-feature", "title": "Hidden or undocumented feature marker", "pattern": "(?i)\\b(?:easter[_\\s-]?egg|hidden[_\\s-]?(?:feature|command|flag|menu|option)|secret[_\\s-]?(?:command|menu|flag)|undocumented|konami)\\b", "severity": "low", "confidence": 0.3},
+    {"id": "beh.persistence", "title": "References shell startup files or service registration", "pattern": "(?:~/|\\$HOME/)\\.(?:bashrc|zshrc|bash_profile|profile)\\b|\\bcrontab\\s+-|\\bsystemctl\\s+enable\\b|\\blaunchctl\\s+load\\b|\\bschtasks\\s+/create\\b", "skip_contexts": ["docs"], "severity": "low", "confidence": 0.3, "detail": "Installers do this legitimately. Unexpected in a library."},
+    {"id": "beh.large-base64-blob", "title": "Large base64-like blob in source code", "pattern": "[A-Za-z0-9+/]{400,}={0,2}", "exts": ["py", "js", "mjs", "cjs", "ts", "sh", "ps1", "rb", "php", "pl", "go", "java", "cs"], "severity": "low", "confidence": 0.35},
+    {"id": "beh.hex-escape-blob", "title": "Long hex-escaped string (possible obfuscation or shellcode)", "pattern": "(?:\\\\x[0-9a-fA-F]{2}){24,}", "exts": ["py", "js", "mjs", "cjs", "ts", "sh", "rb", "php", "pl", "go", "c", "cpp"], "severity": "medium", "confidence": 0.45},
+    {"id": "beh.charcode-blob", "title": "String assembled from many char codes", "pattern": "String\\.fromCharCode\\((?:\\s*\\d+\\s*,){15,}", "exts": ["js", "mjs", "cjs", "ts"], "severity": "medium", "confidence": 0.45},
+    {"id": "beh.chat-webhook", "title": "Chat webhook URL embedded (common exfiltration sink)", "pattern": "https://discord(?:app)?\\.com/api/webhooks/\\d+/[\\w-]+|https://api\\.telegram\\.org/bot\\d+:[\\w-]+|https://hooks\\.slack\\.com/services/T\\w+/B\\w+/\\w+", "severity": "medium", "confidence": 0.6},
+    {"id": "beh.paste-or-tunnel-service", "title": "Reference to paste, tunnel or request-capture service", "pattern": "(?i)\\bhttps?://[\\w.-]*(?:pastebin\\.com|paste\\.ee|hastebin\\.com|ngrok(?:-free)?\\.(?:io|app|dev)|serveo\\.net|localtunnel\\.me|trycloudflare\\.com|interact\\.sh|burpcollaborator\\.net|webhook\\.site|requestbin\\.\\w+|pipedream\\.net)\\b", "severity": "medium", "confidence": 0.45},
+    {"id": "beh.raw-ip-url", "title": "URL with a raw public IP address", "pattern": "\\bhttps?://(?!(?:127\\.|10\\.|192\\.168\\.|172\\.(?:1[6-9]|2\\d|3[01])\\.|0\\.0\\.0\\.0|169\\.254\\.))(?:\\d{1,3}\\.){3}\\d{1,3}\\b", "skip_contexts": ["docs"], "severity": "low", "confidence": 0.4}
+  ],
+  "sensitive_files": [
+    {"id": "inv.env-file", "title": ".env file committed", "pattern": "(?i)(?:^|/)\\.env(?:\\.(?!example|sample|template|dist|defaults?)[\\w-]+)?$", "severity": "medium", "confidence": 0.6},
+    {"id": "inv.ssh-private-key-file", "title": "SSH private key file committed", "pattern": "(?i)(?:^|/)id_(?:rsa|dsa|ecdsa|ed25519)$", "severity": "high", "confidence": 0.7},
+    {"id": "inv.credential-file", "title": "Credential file committed", "pattern": "(?i)(?:^|/)(?:\\.pypirc|\\.netrc|\\.htpasswd|\\.git-credentials|credentials\\.json|service[-_]?account[^/]*\\.json)$", "severity": "high", "confidence": 0.55},
+    {"id": "inv.keystore-file", "title": "Keystore / certificate bundle committed", "pattern": "(?i)\\.(?:jks|keystore|p12|pfx)$", "severity": "medium", "confidence": 0.45}
+  ],
+  "claims": [
+    {"id": "claim.zero-dependencies", "category": "zero_dependencies", "pattern": "(?i)\\b(?:zero|no|0)[- ](?:runtime[- ]|external[- ]|third[- ]party )?dependenc(?:y|ies)\\b|\\bdependency[- ]free\\b"},
+    {"id": "claim.security-superlative", "category": "security_superlative", "pattern": "(?i)\\b(?:military|bank|enterprise)[- ]grade\\b|\\bunhackable\\b|\\bhack[- ]?proof\\b|\\bbullet[- ]?proof\\b|\\b100% (?:secure|safe)\\b|\\b(?:fully|completely|totally|absolutely) (?:secure|safe)\\b|\\b(?:zero|no) (?:known )?vulnerabilit(?:y|ies)\\b|\\bvulnerability[- ]free\\b"},
+    {"id": "claim.audited", "category": "audited", "pattern": "(?i)\\b(?:has been|was|been|is|are|passed|passes|passing) (?:independently |externally |professionally |third[- ]party )?(?:security[- ])?(?:audited|pen[- ]?tested|penetration[- ]tested)\\b|\\bpassed (?:a |an |the )?(?:independent |third[- ]party |external )?(?:security )?audits?\\b|\\b(?:independently|externally|professionally|third[- ]party) audited\\b|\\bfully audited\\b"},
+    {"id": "claim.no-telemetry", "category": "no_telemetry", "pattern": "(?i)\\b(?:no|zero|without)[- ](?:telemetry|tracking|analytics|data[- ]collection|usage[- ]data)\\b|\\b(?:never|doesn't|does not|don't|do not) (?:collect|track|send|upload|phone home|share)\\b|\\bprivacy[- ](?:first|focused|friendly)\\b"},
+    {"id": "claim.offline-local", "category": "offline_local", "pattern": "(?i)\\b100% (?:local|offline)\\b|\\bworks (?:fully |completely )?offline\\b|\\bruns (?:fully |entirely |completely )?(?:locally|offline)\\b|\\bnever leaves your (?:machine|computer|device)\\b|\\bno (?:network|internet) (?:access|connection|calls?) (?:required|needed)\\b"},
+    {"id": "claim.performance", "category": "performance", "pattern": "(?i)\\b\\d+(?:\\.\\d+)?x (?:faster|quicker|more efficient)\\b|\\b\\d+ times (?:faster|quicker)\\b|\\bblazing(?:ly)?[- ]fast\\b|\\blightning[- ]fast\\b|\\bultra[- ]fast\\b|\\bthe fastest\\b|\\bfastest (?:\\w+ ){0,2}(?:library|framework|tool|parser|implementation|engine)\\b"},
+    {"id": "claim.test-coverage", "category": "test_coverage", "pattern": "(?i)\\b100% (?:test )?coverage\\b|\\bfully tested\\b|\\bextensively tested\\b|\\bwell[- ]tested\\b|\\bthoroughly tested\\b|\\bcomprehensive (?:test )?(?:suite|tests)\\b|\\bfull test coverage\\b"},
+    {"id": "claim.production-ready", "category": "production_ready", "pattern": "(?i)\\bproduction[- ]ready\\b|\\bbattle[- ]tested\\b|\\benterprise[- ]ready\\b"},
+    {"id": "claim.license", "category": "license", "pattern": "(?i)\\b(mit|apache(?:[- ]?2(?:\\.0)?)?|lgpl|agpl|gpl(?:[- ]?v?[23](?:\\.0)?)?|bsd(?:[- ][23][- ]clause)?|mpl(?:[- ]?2(?:\\.0)?)?|isc|unlicense)[- ]licen[sc]e[ds]?\\b|\\blicen[sc]ed under (?:the )?(mit|apache|lgpl|agpl|gpl|bsd|mpl|isc)\\b|img\\.shields\\.io/badge/licen[sc]e-(mit|apache|lgpl|agpl|gpl|bsd|mpl|isc|unlicense)"},
+    {"id": "claim.open-source", "category": "open_source", "pattern": "(?i)\\bopen[- ]source\\b"},
+    {"id": "claim.popularity", "category": "popularity", "pattern": "(?i)\\b(?:trusted|used|loved) by (?:[\\d,.]+[km]?\\+?|thousands|millions|hundreds)\\b|\\b\\d[\\d,.]*[km]?\\+? (?:users|downloads|companies)\\b|\\bmost popular\\b|\\bindustry[- ]standard\\b"}
+  ],
+  "telemetry_domains": [
+    "posthog.com", "segment.io", "segment.com", "mixpanel.com", "amplitude.com", "sentry.io",
+    "datadoghq.com", "datadoghq.eu", "google-analytics.com", "googletagmanager.com", "analytics.google.com",
+    "plausible.io", "heapanalytics.com", "fullstory.com", "hotjar.com", "bugsnag.com", "newrelic.com",
+    "nr-data.net", "rollbar.com", "logrocket.com", "launchdarkly.com", "statsig.com", "clarity.ms",
+    "matomo.cloud", "umami.is", "rudderstack.com"
+  ],
+  "telemetry_prefixes": ["telemetry", "analytics", "metrics", "tracking", "track"],
+  "ignore_domains": [
+    "localhost", "example.com", "example.org", "example.net", "w3.org", "schema.org", "json-schema.org",
+    "xmlns.com", "purl.org", "schemas.microsoft.com", "schemas.xmlsoap.org", "xml.org"
+  ],
+  "ignore_url_substrings": ["opensource.org/licenses", "apache.org/licenses", "gnu.org/licenses", "creativecommons.org/"],
+  "popular_packages": {
+    "npm": [
+      "lodash", "express", "react", "react-dom", "axios", "chalk", "commander", "moment", "request", "debug",
+      "async", "underscore", "webpack", "typescript", "eslint", "prettier", "jest", "mocha", "vue", "angular",
+      "jquery", "next", "body-parser", "dotenv", "uuid", "yargs", "glob", "minimist", "mkdirp", "rimraf",
+      "semver", "tslib", "inquirer", "cors", "mongoose", "socket.io", "passport", "bluebird", "colors",
+      "node-fetch", "cheerio", "rxjs", "redux", "classnames", "prop-types", "core-js", "fs-extra", "ws",
+      "jsonwebtoken", "bcrypt", "nodemon", "puppeteer", "electron", "pm2", "cross-env", "crypto-js", "left-pad"
+    ],
+    "pypi": [
+      "requests", "numpy", "pandas", "urllib3", "setuptools", "boto3", "botocore", "django", "flask", "pytest",
+      "pyyaml", "cryptography", "jinja2", "sqlalchemy", "scipy", "pillow", "matplotlib", "tensorflow", "torch",
+      "scikit-learn", "beautifulsoup4", "lxml", "click", "colorama", "certifi", "idna", "six", "python-dateutil",
+      "pytz", "attrs", "packaging", "pip", "wheel", "aiohttp", "fastapi", "uvicorn", "pydantic", "openai",
+      "anthropic", "transformers", "selenium", "paramiko", "psycopg2", "redis", "celery", "gunicorn", "protobuf",
+      "grpcio", "tqdm", "rich", "typer", "httpx", "pyjwt", "jsonschema", "regex", "markdown", "docutils"
+    ]
+  }
+}

@@ -1,0 +1,60 @@
+name: "scanrepo"
+description: "Static scan for unsupported claims, vulnerabilities and risky defaults. Never executes the repository's code."
+author: "scanrepo"
+branding:
+  icon: "shield"
+  color: "gray-dark"
+
+inputs:
+  target:
+    description: "Directory to scan. Defaults to the checked-out repository."
+    required: false
+    default: "."
+  fail-on:
+    description: "Fail the job if a production finding at/above this severity is found: none, low, medium, high, critical."
+    required: false
+    default: "none"
+  min-confidence:
+    description: "Hide and gate on findings below this confidence (0-1). 0 = show all; gate uses 0.5 when 0."
+    required: false
+    default: "0"
+  no-external:
+    description: "Do not call osv-scanner or npm for known-vulnerability lookups."
+    required: false
+    default: "false"
+
+outputs:
+  report-dir:
+    description: "Directory containing report.md, report.json and report.sarif."
+    value: ${{ steps.run.outputs.report-dir }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Run scanrepo
+      id: run
+      shell: bash
+      env:
+        SR_TARGET: ${{ inputs.target }}
+        SR_FAIL_ON: ${{ inputs.fail-on }}
+        SR_MIN_CONF: ${{ inputs.min-confidence }}
+        SR_NO_EXTERNAL: ${{ inputs.no-external }}
+        SR_ACTION_PATH: ${{ github.action_path }}
+        SR_OUT: ${{ runner.temp }}/scanrepo-report
+      run: |
+        set -u
+        args=("$SR_TARGET" -o "$SR_OUT" -q --fail-on "$SR_FAIL_ON" --min-confidence "$SR_MIN_CONF")
+        if [ "$SR_NO_EXTERNAL" = "true" ]; then args+=(--no-external); fi
+        set +e
+        PYTHONPATH="$SR_ACTION_PATH" python3 -m scanrepo "${args[@]}" > "$SR_OUT.stdout.md" 2>"$SR_OUT.stderr.txt"
+        code=$?
+        set -e
+        cat "$SR_OUT.stderr.txt" >&2 || true
+        echo "report-dir=$SR_OUT" >> "$GITHUB_OUTPUT"
+        if [ -f "$SR_OUT/report.md" ]; then cat "$SR_OUT/report.md" >> "$GITHUB_STEP_SUMMARY"; fi
+        exit $code

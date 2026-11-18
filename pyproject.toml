@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scanrepo"
+version = "0.1.0"
+description = "Static scanner for unsupported claims and vulnerabilities in repositories. Never executes the scanned code."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+license = { text = "MIT" }
+
+[project.scripts]
+scan-repo = "scanrepo.cli:main"
+scanrepo-mcp = "scanrepo.mcp_server:main"
+
+[tool.setuptools.packages.find]
+include = ["scanrepo*"]
+
+[tool.setuptools.package-data]
+scanrepo = ["data/*.json"]
