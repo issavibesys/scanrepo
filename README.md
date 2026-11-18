@@ -84,6 +84,20 @@ may change:
 Evidence is producer-declared. scanrepo checks the format and the rules above, but it does not verify that the
 producer really ran its command.
 
+### REA converter
+
+`scanrepo/converters/rea.py` turns the JSON output of REA's static command into evidence records:
+
+```bash
+npx -y rea-agents@latest analyze-javascript-application /path/to/app --json > rea.json
+python3 -m scanrepo.converters.rea rea.json --root /path/to/repo --out evidence/rea.jsonl
+python3 -m scanrepo /path/to/repo --evidence evidence
+```
+
+The converter reads explicit `BrowserWindow` web preferences such as `nodeIntegration: true` as class B findings,
+with the file and line REA reports. Dynamic values become class C leads. The field names come from REA's source;
+the output envelope is searched for rather than assumed, so run it on real output before you rely on it.
+
 ## Extend the rules
 
 ```bash

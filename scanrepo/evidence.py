@@ -123,6 +123,8 @@ def _check(raw: Any, root: Path, commit: Optional[str], categories: set[str]) ->
     problem = _command_problem(producer, command, cls)
     if problem:
         return None, problem
+    if cls == "B" and not commit:
+        return None, "class B needs a git commit to bind the evidence to; this repository has none"
     if commit:
         target = raw.get("target_commit")
         if not isinstance(target, str) or len(target) < 7 or not commit.startswith(target):

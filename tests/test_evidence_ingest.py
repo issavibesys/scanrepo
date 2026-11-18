@@ -7,6 +7,7 @@ from pathlib import Path
 from scanrepo.context import ScanOptions
 from scanrepo.engine import scan
 
+from .gitutil import git_init, head_of
 from .test_scan import make_repo
 
 README = "# demo\n\nNo telemetry, ever.\n"
@@ -22,7 +23,13 @@ def base(**kw):
 
 
 def run_scan(records, root=None, ev_dir=None):
-    root = root or make_repo({"README.md": README, "src/a.js": "const x = 1;\n"})
+    if root is None:
+        root = make_repo({"README.md": README, "src/a.js": "const x = 1;\n"})
+        head = git_init(root)
+    else:
+        head = head_of(root) if (root / ".git").exists() else None
+    if head:
+        records = [r if "target_commit" in r else {**r, "target_commit": head} for r in records]
     if ev_dir is None:
         ev_dir = Path(tempfile.mkdtemp(prefix="ev-"))
         (ev_dir / "rea.jsonl").write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")
@@ -104,9 +111,11 @@ class EvidenceContractTest(unittest.TestCase):
         self.assertIn("no claim of category", notes(r))
 
     def test_malformed_line_does_not_crash(self):
+        root = make_repo({"README.md": README, "src/a.js": "x\n"})
+        head = git_init(root)
         ev = Path(tempfile.mkdtemp(prefix="ev-"))
-        (ev / "rea.jsonl").write_text("{not json\n" + json.dumps(base()) + "\n", encoding="utf-8")
-        r = run_scan([], ev_dir=ev)
+        (ev / "rea.jsonl").write_text("{not json\n" + json.dumps(base(target_commit=head)) + "\n", encoding="utf-8")
+        r = run_scan([], root=root, ev_dir=ev)
         self.assertIn("not valid JSON", notes(r))
         self.assertEqual(claim(r).status, "contradicted")
 
@@ -119,18 +128,19 @@ class EvidenceContractTest(unittest.TestCase):
         self.assertNotEqual(claim(r).status, "contradicted")
         self.assertIn("inside the scanned repository", notes(r))
 
+    def test_class_b_without_git_commit_is_rejected(self):
+        root = make_repo({"README.md": README, "src/a.js": "x\n"})  # no git: nothing to bind to
+        r = run_scan([base()], root=root)
+        self.assertNotEqual(claim(r).status, "contradicted")
+        self.assertIn("needs a git commit", notes(r))
+
     def test_wrong_commit_is_rejected(self):
         root = make_repo({"README.md": README})
-        env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
-               "PATH": "/usr/bin:/bin:/usr/local/bin"}
-        subprocess.run(["git", "init", "-q"], cwd=root, check=True, env=env)
-        subprocess.run(["git", "add", "-A"], cwd=root, check=True, env=env)
-        subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=root, check=True, env=env)
-        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True).stdout.strip()
+        head = git_init(root)
         r = run_scan([base(target_commit="deadbee")], root=root)
         self.assertNotEqual(claim(r).status, "contradicted")
         self.assertIn("different version", notes(r))
-        r2 = run_scan([base(target_commit=head[:12])], root=root)
+        r2 = run_scan([base(target_commit=head[:12])], root=root)  # abbreviated commit still matches
         self.assertEqual(claim(r2).status, "contradicted")
 
     def test_summary_is_reported(self):
