@@ -51,13 +51,16 @@ def to_markdown(report: Report, min_confidence: float = 0.0, limit: int = 200) -
     add("## Claims")
     add("")
     if report.claims:
-        add("| Claim | Status | Confidence | Where | Evidence |")
-        add("|---|---|---|---|---|")
+        add("| Claim | Status | Class | Confidence | Where | Evidence | Falsification test |")
+        add("|---|---|---|---|---|---|---|")
         order = {"contradicted": 0, "unsupported": 1, "no_contradiction_found": 2, "supported": 3}
         for c in sorted(report.claims, key=lambda c: order[c.status]):
-            add(f"| {_cell(c.text)} | {_STATUS_LABEL[c.status]} | {c.confidence:.2f} | `{_cell(c.file)}:{c.line}` | {_cell('; '.join(c.evidence)) or '—'} |")
+            add(f"| {_cell(c.text)} | {_STATUS_LABEL[c.status]} | {c.evidence_class} | {c.confidence:.2f} | `{_cell(c.file)}:{c.line}` | {_cell('; '.join(c.evidence)) or '—'} | {_cell(c.test) or '—'} |")
         add("")
         add("*supported* = evidence found. *no contradiction found* = a negative claim that the scan found nothing against; this is not proof.")
+        add("")
+        add("Evidence classes: **A** observed at runtime · **B** structured repository data · **C** text pattern (a lead only) · **D** unverified hypothesis. "
+            "Only A or B can mark a claim as contradicted.")
     else:
         add("No claims were extracted.")
     add("")
@@ -77,7 +80,7 @@ def to_markdown(report: Report, min_confidence: float = 0.0, limit: int = 200) -
             add("")
         where = f"`{_cell(f.file)}" + (f":{f.line}`" if f.line else "`") if f.file else "repository-wide"
         ctx = "" if f.context == "production" else f" · {f.context} code"
-        add(f"**{i}. {_cell(f.title)}** — {where} · confidence {f.confidence:.2f} · `{f.rule_id}` · step {f.step}{ctx}")
+        add(f"**{i}. {_cell(f.title)}** — {where} · class {f.evidence_class} · confidence {f.confidence:.2f} · `{f.rule_id}` · step {f.step}{ctx}")
         if f.evidence:
             add(f"   - Evidence: `{sanitize(f.evidence, 200)}`")
         if f.detail:

@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 
 from ..context import ScanContext
 from ..fsutil import CODE_EXTS
-from ..models import Claim, Finding, StepResult
+from ..models import CONTRADICTION_CLASSES, Claim, Finding, StepResult
 from .behavior import scan_behavior
 from .common import sanitize
 from .deps import _norm, parse_manifests
@@ -51,8 +51,13 @@ def _facts(ctx: ScanContext) -> dict[str, Any]:
         rf = next(f for f in ctx.files if f.rel == rel)
         ci_text += (ctx.read(rf, cache=True) or "").lower()
     cov_names = {".coveragerc", "codecov.yml", ".codecov.yml", "coverage.xml", "lcov.info", ".nycrc", ".nycrc.json", "coverage.json"}
+    manifest_names = {"package.json", "pyproject.toml", "requirements.txt", "setup.py", "cargo.toml", "go.mod"}
+    tele_manifest = any(
+        x.rule_id == "beh.telemetry-sdk" and x.file and x.file.rsplit("/", 1)[-1].lower() in manifest_names
+        for x in beh["findings"]
+    )
     return {
-        "inv": inv, "deps": dp, "beh": beh,
+        "inv": inv, "deps": dp, "beh": beh, "tele_manifest": tele_manifest,
         "tests": [f for f in ctx.files if f.context == "test" and f.ext in CODE_EXTS],
         "src": [f for f in ctx.files if f.context == "production" and f.ext in CODE_EXTS],
         "security_md": [r for r in ("security.md", ".github/security.md", "docs/security.md") if r in rels],
@@ -163,6 +168,34 @@ def v_open_source(text: str, m: Any, f: dict[str, Any]) -> Verdict:
 def v_popularity(text: str, m: Any, f: dict[str, Any]) -> Verdict:
     return Verdict("unsupported", "info", 0.3, [], "Popularity cannot be verified from the repository. Check registry download stats and the publisher.")
 
+
+# Evidence class a verdict gets for each category, unless a verifier says otherwise.
+# B: structured data (manifests, git, license text). C: text patterns, which may only support a claim.
+CLASS_BY_CATEGORY = {
+    "zero_dependencies": "B", "license": "B", "open_source": "B", "production_ready": "B", "test_coverage": "B",
+    "audited": "B", "performance": "B", "security_superlative": "C", "no_telemetry": "C", "offline_local": "C",
+    "popularity": "C",
+}
+CHECK_BY_CATEGORY = {
+    "zero_dependencies": "manifest-parser", "license": "license-file", "open_source": "license-file",
+    "production_ready": "git-metadata", "test_coverage": "file-scan", "audited": "file-scan",
+    "performance": "file-scan", "security_superlative": "regex-rules", "no_telemetry": "regex-rules",
+    "offline_local": "regex-rules", "popularity": "none",
+}
+# The falsification test: the observation that would prove the claim wrong.
+TEST_BY_CATEGORY = {
+    "zero_dependencies": "Falsified by any runtime dependency declared in a manifest.",
+    "security_superlative": "Falsified by any known vulnerability or a missing security policy; absolute claims cannot be shown by a repository.",
+    "audited": "Supported only by an audit report; falsified by its absence in the repository.",
+    "no_telemetry": "Falsified by a telemetry SDK declared in a manifest (class B) or by telemetry code in source (class C, weak).",
+    "offline_local": "Falsified by runtime network calls; static scanning can only show referenced hosts (class C, weak).",
+    "performance": "Supported only by reproducible benchmark results; falsified by none being present.",
+    "test_coverage": "Falsified by no tests, or a coverage claim without a coverage report.",
+    "production_ready": "Falsified by a very young repository claiming a track record, or by missing tests.",
+    "license": "Falsified by a license file that reads differently from the claimed license.",
+    "open_source": "Falsified by the absence of a license file.",
+    "popularity": "Not testable from the repository; needs registry statistics.",
+}
 
 VERIFIERS: dict[str, Callable[[str, Any, dict[str, Any]], Verdict]] = {
     "zero_dependencies": v_zero_deps, "security_superlative": v_security_superlative, "audited": v_audited,
@@ -311,11 +344,26 @@ def run(ctx: ScanContext) -> StepResult:
         return res
     for cat, rf, line, text, m in _extract(ctx, readmes):
         v = VERIFIERS[cat](text, m, facts)
-        res.claims.append(Claim(cat, text, rf.rel, line, v.status, v.confidence, [sanitize(e, 160) for e in v.evidence]))
-        if v.status in ("unsupported", "contradicted"):
+        ev_class = CLASS_BY_CATEGORY.get(cat, "C")
+        if cat == "no_telemetry" and facts["tele_manifest"]:
+            ev_class = "B"  # the SDK is declared in a manifest, which is structured data
+        check = CHECK_BY_CATEGORY.get(cat, "regex-rules")
+        if cat == "no_telemetry" and ev_class == "B":
+            check = "manifest-parser"
+        status = v.status
+        if status == "contradicted" and ev_class not in CONTRADICTION_CLASSES:
+            # Pattern-only evidence is a lead. It may not overturn a claim.
+            status = "unsupported"
+            v.evidence.append("only pattern evidence (class C) was found, which cannot contradict a claim")
+            v.confidence = min(v.confidence, 0.4)
+            v.severity = "low"
+        res.claims.append(Claim(cat, text, rf.rel, line, status, v.confidence, [sanitize(e, 160) for e in v.evidence],
+                                evidence_class=ev_class, verified_by=[check], test=TEST_BY_CATEGORY.get(cat, "")))
+        if status in ("unsupported", "contradicted"):
             detail = (v.detail + (" Evidence: " + "; ".join(sanitize(e, 160) for e in v.evidence) if v.evidence else "")).strip()
-            res.findings.append(Finding("claims", f"claim.{cat}.{v.status}", f"Claim {v.status.replace('_', ' ')}: {LABELS[cat]}",
-                                        v.severity, v.confidence, rf.rel, line, text, "production", detail))
+            res.findings.append(Finding("claims", f"claim.{cat}.{status}", f"Claim {status.replace('_', ' ')}: {LABELS[cat]}",
+                                        v.severity, v.confidence, rf.rel, line, text, "production", detail,
+                                        evidence_class=ev_class, verified_by=[check]))
     res.findings.extend(_readme_checks(ctx, facts, readmes))
     counts = Counter(c.status for c in res.claims)
     res.data = {"claims_by_status": dict(counts), "readmes": [r.rel for r in readmes]}

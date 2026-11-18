@@ -97,8 +97,11 @@ class ScanFixtureTest(unittest.TestCase):
         statuses = [c.status for c in self.claim("zero_dependencies")]
         self.assertEqual(statuses, ["contradicted"])
 
-    def test_claim_no_telemetry_is_contradicted(self):
-        self.assertEqual([c.status for c in self.claim("no_telemetry")], ["contradicted"])
+    def test_claim_no_telemetry_from_source_only_is_not_contradicted(self):
+        # the SDK is only imported in source (class C), which may not overturn a claim
+        c = self.claim("no_telemetry")
+        self.assertEqual([x.status for x in c], ["unsupported"])
+        self.assertEqual(c[0].evidence_class, "C")
 
     def test_claim_audited_without_report_is_unsupported(self):
         self.assertEqual([c.status for c in self.claim("audited")], ["unsupported"])
@@ -151,7 +154,7 @@ class ScanFixtureTest(unittest.TestCase):
         md = to_markdown(self.report)
         for line in md.splitlines():
             if line.startswith("| ") and "Claim" not in line:
-                self.assertLessEqual(line.count("|") - line.count("\\|"), 6, line)
+                self.assertLessEqual(line.count("|") - line.count("\\|"), 8, line)  # claims table has 7 columns
 
 
 class EdgeCaseTest(unittest.TestCase):

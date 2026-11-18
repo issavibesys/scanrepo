@@ -25,6 +25,25 @@ STEPS: list[tuple[str, str, Callable[[ScanContext], StepResult]]] = [
 STEP_NAMES = [s[0] for s in STEPS] + ["report"]
 
 
+# Findings from structured data are class B. Everything else keeps the default class C (pattern match).
+_STRUCTURED = (
+    ("vuln.", "vulnerability-db"), ("inv.binary-committed", "magic-bytes"), ("inv.license-mismatch", "license-file"),
+    ("inv.repo-owner-mismatch", "git-metadata"), ("inv.young-repository", "git-metadata"),
+    ("dep.install-script", "manifest-parser"), ("dep.non-registry-source", "manifest-parser"),
+    ("dep.no-lockfile", "manifest-parser"), ("dep.unpinned", "manifest-parser"),
+)
+
+
+def _assign_classes(res: StepResult) -> None:
+    for f in res.findings:
+        if f.rule_id.startswith("claim."):
+            continue  # claim findings are classed by the claim verdict
+        for prefix, checker in _STRUCTURED:
+            if f.rule_id.startswith(prefix):
+                f.evidence_class, f.verified_by = "B", [checker]
+                break
+
+
 def risk_from(findings: list) -> tuple[int, str]:
     """0-100 score with diminishing returns, so one critical finding outweighs many weak ones."""
     per_rule: dict[str, list[float]] = {}
@@ -65,6 +84,7 @@ def scan(target: str, options: Optional[ScanOptions] = None,
                 res = StepResult(name, status="error", notes=[f"Step crashed: {type(exc).__name__}: {exc}"],
                                  not_checked=[f"Step '{name}' did not complete, so its checks are missing from this report"])
             res.title = title
+            _assign_classes(res)
             res.duration_s = time.monotonic() - started
             results.append(res)
 
@@ -92,7 +112,8 @@ def scan(target: str, options: Optional[ScanOptions] = None,
             risk_score=score, risk_level=level,
             stats={"files_scanned": len(ctx.files), "languages": inv_data.get("languages", {}), "findings_by_severity": by_sev,
                    "claims_by_status": {s: sum(1 for c in claim_list if c.status == s)
-                                        for s in ("supported", "no_contradiction_found", "unsupported", "contradicted")}},
+                                        for s in ("supported", "no_contradiction_found", "unsupported", "contradicted")},
+                   "findings_by_class": {c: sum(1 for f in findings if f.evidence_class == c) for c in ("A", "B", "C", "D")}},
         )
     finally:
         cleanup()

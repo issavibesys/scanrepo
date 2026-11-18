@@ -17,6 +17,15 @@ CONTEXT_WEIGHT = {"production": 1.0, "example": 0.5, "test": 0.25, "docs": 0.25}
 # contradicted            the repository contains evidence against the claim
 CLAIM_STATUSES = ("supported", "no_contradiction_found", "unsupported", "contradicted")
 
+# Evidence classes, from strongest to weakest:
+#   A  observed at runtime in a sandbox
+#   B  deterministic check against structured repository data (manifests, git metadata, license text,
+#      vulnerability database, binary magic bytes)
+#   C  pattern match in source text: a lead, never enough to contradict a claim
+#   D  hypothesis from an agent, not yet tested
+EVIDENCE_CLASSES = ("A", "B", "C", "D")
+CONTRADICTION_CLASSES = ("A", "B")
+
 
 @dataclass
 class Finding:
@@ -30,6 +39,8 @@ class Finding:
     evidence: str = ""
     context: str = "production"
     detail: str = ""
+    evidence_class: str = "C"
+    verified_by: list[str] = field(default_factory=list)
 
     def score(self) -> float:
         return SEV_POINTS[self.severity] * self.confidence * CONTEXT_WEIGHT.get(self.context, 1.0)
@@ -47,6 +58,9 @@ class Claim:
     status: str
     confidence: float
     evidence: list[str] = field(default_factory=list)
+    evidence_class: str = "C"
+    verified_by: list[str] = field(default_factory=list)
+    test: str = ""  # the falsification test: what would prove the claim wrong
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
