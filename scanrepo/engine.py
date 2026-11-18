@@ -27,7 +27,12 @@ STEP_NAMES = [s[0] for s in STEPS] + ["report"]
 
 def risk_from(findings: list) -> tuple[int, str]:
     """0-100 score with diminishing returns, so one critical finding outweighs many weak ones."""
-    total = sum(f.score() for f in findings)
+    per_rule: dict[str, list[float]] = {}
+    for f in findings:
+        per_rule.setdefault(f.rule_id, []).append(f.score())
+    # the first 3 hits of a rule count fully, further hits count a quarter: many hits of one pattern is one signal
+    # and no single rule can contribute more than 8 points, however many times it fires
+    total = sum(min(sum(sorted(v, reverse=True)[:3]) + 0.25 * sum(sorted(v, reverse=True)[3:]), 8.0) for v in per_rule.values())
     score = round(100 * (1 - math.exp(-total / 25)))
     top = max((SEV_RANK[f.severity] for f in findings if f.context == "production" and f.confidence >= 0.5), default=-1)
     level = "low" if score < 15 else "medium" if score < 40 else "high" if score < 70 else "critical"

@@ -31,6 +31,7 @@ TEST_DIRS = frozenset({
 })
 EXAMPLE_DIRS = frozenset({"example", "examples", "sample", "samples", "demo", "demos"})
 DOC_DIRS = frozenset({"docs", "doc", "documentation"})
+_TEST_DIR = re.compile(r"^(?:.*[-_.])?(?:tests?|specs?|fixtures?|__tests__)(?:[-_.].*)?$")
 _NOT_DOC_TXT = re.compile(r"^(?:requirements.*\.txt|constraints.*\.txt|cmakelists\.txt)$")
 _TEST_NAME = re.compile(r"^(?:test_.*|.*_test\.\w+|.*\.test\.\w+|.*\.spec\.\w+|conftest\.py)$")
 
@@ -88,7 +89,7 @@ class WalkResult:
 def classify_context(rel: str) -> str:
     parts = [p.lower() for p in rel.split("/")]
     name, dirs = parts[-1], parts[:-1]
-    if any(d in TEST_DIRS for d in dirs) or _TEST_NAME.match(name):
+    if any(d in TEST_DIRS or _TEST_DIR.match(d) for d in dirs) or _TEST_NAME.match(name):
         return "test"
     ext = name.rsplit(".", 1)[1] if "." in name else ""
     if _NOT_DOC_TXT.match(name):

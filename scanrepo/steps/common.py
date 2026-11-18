@@ -90,6 +90,15 @@ def rule_applies(rule: dict[str, Any], rf: RepoFile) -> bool:
     return rf.context not in rule["skip_contexts"]
 
 
+_COMMENT_START = ("//", "#", "*", "/*", "<!--", "--")
+
+
+def _comment_line(text: str, pos: int) -> bool:
+    """True when the match sits on a line that starts as a comment. Comments describe code; they do not run it."""
+    start = text.rfind("\n", 0, pos) + 1
+    return text[start:pos].lstrip().startswith(_COMMENT_START)
+
+
 def scan_text(step: str, rules: list[dict[str, Any]], rf: RepoFile, text: str, findings: list[Finding],
               counters: Counter, secrets: bool = False, per_file_cap: int = 3, global_cap: int = 60) -> None:
     """Apply regex rules to one file. Caps keep reports readable; suppressed hits are counted."""
@@ -105,6 +114,8 @@ def scan_text(step: str, rules: list[dict[str, Any]], rf: RepoFile, text: str, f
             value = text[span[0]:span[1]]
             if secrets and is_placeholder(value):
                 continue
+            if not secrets and _comment_line(text, span[0]):
+                continue
             min_ent = rule.get("min_entropy")
             if min_ent and entropy(value) < min_ent:
                 continue
@@ -113,8 +124,12 @@ def scan_text(step: str, rules: list[dict[str, Any]], rf: RepoFile, text: str, f
                 continue
             in_file += 1
             counters[rid] += 1
+            # Test and documentation code often holds fake keys on purpose: keep the hit, cap its severity.
+            sev = rule["severity"]
+            if rf.context in ("test", "docs") and sev in ("critical", "high"):
+                sev = "medium"
             findings.append(Finding(
-                step=step, rule_id=rid, title=rule["title"], severity=rule["severity"],
+                step=step, rule_id=rid, title=rule["title"], severity=sev,
                 confidence=rule["confidence"], file=rf.rel, line=li.line_of(span[0]),
                 evidence=make_evidence(li, span[0], span[1], mask=secrets and rule.get("mask", True)),
                 context=rf.context, detail=rule.get("detail", ""),

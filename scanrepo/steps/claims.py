@@ -302,7 +302,8 @@ def _keyword_stuffing(rf: Any, text: str, f: dict[str, Any]) -> list[Finding]:
 def run(ctx: ScanContext) -> StepResult:
     res = StepResult("claims")
     facts = _facts(ctx)
-    readmes = [rf for rf in ctx.files if rf.name_lower.startswith("readme") and rf.rel.count("/") <= 1][:5]
+    # only the root README describes the project; READMEs in subfolders describe parts of it
+    readmes = [rf for rf in ctx.files if rf.name_lower.startswith("readme") and rf.rel.count("/") == 0][:5]
     if not readmes:
         res.notes.append("No README found, so there are no claims to verify")
         res.findings.append(Finding("claims", "readme.missing", "No README found", "info", 0.5, None, None, "", "production"))
