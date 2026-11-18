@@ -19,6 +19,7 @@ from typing import Any, Callable, Optional
 from urllib.parse import urlsplit
 
 from ..context import ScanContext
+from .. import evidence as ev
 from ..fsutil import CODE_EXTS
 from ..models import CONTRADICTION_CLASSES, Claim, Finding, StepResult
 from .behavior import scan_behavior
@@ -332,6 +333,18 @@ def _keyword_stuffing(rf: Any, text: str, f: dict[str, Any]) -> list[Finding]:
                     "Combined with very little code this is typical of fake or SEO-bait repositories." if thin else "On its own this is weak evidence.")]
 
 
+def _external(ctx: ScanContext, res: StepResult) -> Optional[dict[str, Any]]:
+    """Apply external evidence records (see evidence.py). Runs inside step 2: the records are inputs to claim verification."""
+    if not ctx.options.evidence_dir:
+        return None
+    commit = collect(ctx)["git"].get("commit")
+    out = ev.apply_evidence(ctx.root, ctx.options.evidence_dir, res.claims, commit, set(VERIFIERS))
+    res.findings.extend(out.findings)
+    res.notes.extend(out.notes)
+    res.not_checked.extend(out.not_checked)
+    return out.summary
+
+
 def run(ctx: ScanContext) -> StepResult:
     res = StepResult("claims")
     facts = _facts(ctx)
@@ -341,6 +354,7 @@ def run(ctx: ScanContext) -> StepResult:
         res.notes.append("No README found, so there are no claims to verify")
         res.findings.append(Finding("claims", "readme.missing", "No README found", "info", 0.5, None, None, "", "production"))
         res.not_checked.append("Claims in places other than the README (website, docs site, package registry page) are not checked")
+        _external(ctx, res)
         return res
     for cat, rf, line, text, m in _extract(ctx, readmes):
         v = VERIFIERS[cat](text, m, facts)
@@ -365,8 +379,11 @@ def run(ctx: ScanContext) -> StepResult:
                                         v.severity, v.confidence, rf.rel, line, text, "production", detail,
                                         evidence_class=ev_class, verified_by=[check]))
     res.findings.extend(_readme_checks(ctx, facts, readmes))
+    ext = _external(ctx, res)
     counts = Counter(c.status for c in res.claims)
     res.data = {"claims_by_status": dict(counts), "readmes": [r.rel for r in readmes]}
+    if ext:
+        res.data["evidence"] = ext
     res.not_checked.append("Only README files are read for claims; website, docs site and registry descriptions are not")
     res.not_checked.append("A claim marked supported or no_contradiction_found shows only that no counter-evidence was found; it is not an audit")
     res.not_checked.append("Whether a package on npm/PyPI was really published by this repository's author needs registry access")

@@ -22,6 +22,7 @@ class ScanOptions:
     depth: int = 200
     timeout_s: int = 600
     external_timeout_s: int = 300
+    evidence_dir: Optional[str] = None  # directory of external evidence records, outside the repository
 
 
 class ScanContext:

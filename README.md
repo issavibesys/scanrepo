@@ -63,6 +63,27 @@ Claim statuses mean:
 - Rules live in `scanrepo/data/rules.json`. Files that contain the rule patterns themselves (such as the
   rules file or this tool's own source) produce expected hits when you scan this project.
 
+## Add evidence from other tools
+
+Tools can write evidence records into a directory outside the repository, and scanrepo validates them:
+
+```bash
+python3 -m scanrepo ./project --evidence ./evidence
+```
+
+Each record is one JSON object (see `scanrepo/evidence.py` and `examples/evidence/`). scanrepo decides what a record
+may change:
+
+- **Commit binding.** `target_commit` must match the scanned commit, so evidence cannot be reused on another version.
+- **Command allowlist.** Class B needs a static command on the allowlist for its producer. Runtime and capture
+  actions are refused even if they are otherwise allowed.
+- **Classes.** Class A (runtime) is refused in this version. Class C (pattern) and D (hypothesis) cannot contradict a claim.
+  Only class B can.
+- **Location.** Files must be relative paths to existing files inside the repository.
+
+Evidence is producer-declared. scanrepo checks the format and the rules above, but it does not verify that the
+producer really ran its command.
+
 ## Extend the rules
 
 ```bash

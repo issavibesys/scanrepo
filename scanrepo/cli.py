@@ -29,6 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="hide findings below this confidence in Markdown/SARIF; also the bar for --fail-on (default 0, 0.5 with --fail-on)")
     p.add_argument("--skip", action="append", default=[], metavar="STEP", help="skip a step (repeatable)")
     p.add_argument("--rules", metavar="FILE", help="JSON file with extra or overriding rules")
+    p.add_argument("--evidence", metavar="DIR", help="directory of external evidence records (*.json, *.jsonl), outside the repository")
     p.add_argument("--no-external", action="store_true", help="do not call external tools such as osv-scanner or npm")
     p.add_argument("--max-files", type=int, default=20000)
     p.add_argument("--max-file-kb", type=int, default=1024)
@@ -46,7 +47,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return EXIT_ERROR
     gate_conf = args.min_confidence if args.min_confidence > 0 else 0.5
     options = ScanOptions(
-        skip=frozenset(args.skip), rules_file=args.rules, use_external=not args.no_external,
+        skip=frozenset(args.skip), rules_file=args.rules, use_external=not args.no_external, evidence_dir=args.evidence,
         max_files=args.max_files, max_file_kb=args.max_file_kb, depth=args.depth, timeout_s=args.timeout,
     )
     progress = None if args.quiet else (lambda t: print(f"scan-repo: {t} …", file=sys.stderr))
